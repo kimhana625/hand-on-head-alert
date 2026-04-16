@@ -430,16 +430,13 @@
                 cameraDot.classList.add('active');
                 startBtn.textContent = '실행 중';
 
-                // 프레임 처리 루프
-                async function processFrame() {
+                // 프레임 처리 루프 (setInterval로 백그라운드에서도 작동)
+                setInterval(async () => {
                     if (video.readyState >= 2) {
                         await hands.send({ image: video });
                         await faceDetection.send({ image: video });
                     }
-                    requestAnimationFrame(processFrame);
-                }
-
-                processFrame();
+                }, 100); // 초당 10프레임
 
             } catch (err) {
                 console.error('카메라 오류:', err);
