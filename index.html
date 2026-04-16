@@ -243,7 +243,7 @@
             oscillator.frequency.value = 600;
             oscillator.type = 'square';
 
-            gainNode.gain.setValueAtTime(0.4, now);
+            gainNode.gain.setValueAtTime(1.0, now);
             oscillator.frequency.setValueAtTime(600, now);
             oscillator.frequency.setValueAtTime(400, now + 0.1);
             oscillator.frequency.setValueAtTime(600, now + 0.2);
@@ -398,8 +398,8 @@
                 }
             }
 
-            // 상태 변화 (손이 머리 위로 올라간 순간)
-            if (currentState && !handOnHead) {
+            // 손이 머리 위에 있으면 계속 소리 재생
+            if (currentState) {
                 playBeep();
                 detectDot.classList.add('detected');
                 setTimeout(() => detectDot.classList.remove('detected'), 500);
