@@ -221,8 +221,6 @@
         const detectDot = document.getElementById('detectDot');
 
         let handOnHead = false;
-        let lastSoundTime = 0;
-        const COOLDOWN = 1000; // 1초
 
         let latestHandResults = null;
         let latestFaceResults = null;
@@ -231,10 +229,6 @@
         let audioCtx = null;
 
         function playBeep() {
-            const now = Date.now();
-            if (now - lastSoundTime < COOLDOWN) return;
-            lastSoundTime = now;
-
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             }
@@ -249,7 +243,7 @@
             oscillator.frequency.value = 600;
             oscillator.type = 'square';
 
-            gainNode.gain.setValueAtTime(0.2, now);
+            gainNode.gain.setValueAtTime(0.4, now);
             oscillator.frequency.setValueAtTime(600, now);
             oscillator.frequency.setValueAtTime(400, now + 0.1);
             oscillator.frequency.setValueAtTime(600, now + 0.2);
