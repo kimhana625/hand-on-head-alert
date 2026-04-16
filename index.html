@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>손-머리 감지기</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            color: white;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+            font-size: 2rem;
+        }
+
+        .subtitle {
+            color: #888;
+            margin-bottom: 20px;
+        }
+
+        .container {
+            position: relative;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        video, canvas {
+            display: block;
+            max-width: 100%;
+            border-radius: 16px;
+        }
+
+        video {
+            display: none;
+        }
+
+        #canvas {
+            background: #000;
+        }
+
+        .status-bar {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .status-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 12px 24px;
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #666;
+        }
+
+        .status-dot.active {
+            background: #00ff88;
+            box-shadow: 0 0 10px #00ff88;
+        }
+
+        .status-dot.detected {
+            background: #ff4444;
+            box-shadow: 0 0 10px #ff4444;
+            animation: pulse 0.5s ease-in-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.5); }
+        }
+
+        .alert-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 0, 0, 0.8);
+            color: white;
+            padding: 20px 40px;
+            border-radius: 12px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            display: none;
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+            to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        }
+
+        .alert-overlay.show {
+            display: block;
+        }
+
+        .start-btn {
+            background: linear-gradient(135deg, #00ff88 0%, #00cc6a 100%);
+            color: #000;
+            border: none;
+            padding: 16px 48px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .start-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 255, 136, 0.3);
+        }
+
+        .start-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .instructions {
+            margin-top: 30px;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px 30px;
+            border-radius: 12px;
+            max-width: 500px;
+            text-align: center;
+        }
+
+        .instructions h3 {
+            margin-bottom: 10px;
+            color: #00ff88;
+        }
+
+        .instructions p {
+            color: #aaa;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <h1>🖐️ 손-머리 감지기</h1>
+    <p class="subtitle">손을 머리 위로 올리면 소리가 납니다</p>
+
+    <div class="container">
+        <video id="video" playsinline></video>
+        <canvas id="canvas" width="640" height="480"></canvas>
+        <div id="alert" class="alert-overlay">🔔 감지됨!</div>
+    </div>
+
+    <div class="status-bar">
+        <div class="status-item">
+            <div id="cameraDot" class="status-dot"></div>
+            <span>카메라</span>
+        </div>
+        <div class="status-item">
+            <div id="faceDot" class="status-dot"></div>
+            <span>얼굴</span>
+        </div>
+        <div class="status-item">
+            <div id="handDot" class="status-dot"></div>
+            <span>손</span>
+        </div>
+        <div class="status-item">
+            <div id="detectDot" class="status-dot"></div>
+            <span>머리 위 감지</span>
+        </div>
+    </div>
+
+    <button id="startBtn" class="start-btn">카메라 시작</button>
+
+    <div class="instructions">
+        <h3>사용 방법</h3>
+        <p>
+            1. "카메라 시작" 버튼을 클릭하세요<br>
+            2. 카메라가 얼굴과 손을 인식합니다<br>
+            3. 손을 머리 위로 올리면 소리가 납니다
+        </p>
+    </div>
+
+    <!-- MediaPipe CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js" crossorigin="anonymous"></script>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const startBtn = document.getElementById('startBtn');
+        const alertOverlay = document.getElementById('alert');
+
+        const cameraDot = document.getElementById('cameraDot');
+        const faceDot = document.getElementById('faceDot');
+        const handDot = document.getElementById('handDot');
+        const detectDot = document.getElementById('detectDot');
+
+        let handOnHead = false;
+        let lastSoundTime = 0;
+        const COOLDOWN = 1000; // 1초
+
+        let latestHandResults = null;
+        let latestFaceResults = null;
+
+        // 오디오 컨텍스트 (비프음 생성)
+        let audioCtx = null;
+
+        function playBeep() {
+            const now = Date.now();
+            if (now - lastSoundTime < COOLDOWN) return;
+            lastSoundTime = now;
+
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            oscillator.frequency.value = 800;
+            oscillator.type = 'sine';
+
+            gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 0.3);
+
+            // 알림 표시
+            alertOverlay.classList.add('show');
+            setTimeout(() => alertOverlay.classList.remove('show'), 500);
+        }
+
+        // MediaPipe Hands 설정
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 2,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults((results) => {
+            latestHandResults = results;
+            draw();
+        });
+
+        // MediaPipe Face Detection 설정
+        const faceDetection = new FaceDetection({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`
+        });
+
+        faceDetection.setOptions({
+            model: 'short',
+            minDetectionConfidence: 0.7
+        });
+
+        faceDetection.onResults((results) => {
+            latestFaceResults = results;
+            draw();
+        });
+
+        function draw() {
+            ctx.save();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 비디오 좌우 반전하여 그리기
+            ctx.scale(-1, 1);
+            ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+            ctx.restore();
+
+            let headTopY = null;
+            let handPositions = [];
+
+            // 얼굴 그리기
+            if (latestFaceResults && latestFaceResults.detections.length > 0) {
+                faceDot.classList.add('active');
+
+                for (const detection of latestFaceResults.detections) {
+                    const bbox = detection.boundingBox;
+                    // 좌우 반전 좌표 계산
+                    const x = canvas.width - bbox.xCenter * canvas.width - (bbox.width * canvas.width / 2);
+                    const y = bbox.yCenter * canvas.height - (bbox.height * canvas.height / 2);
+                    const w = bbox.width * canvas.width;
+                    const h = bbox.height * canvas.height;
+
+                    headTopY = y;
+
+                    // 얼굴 박스
+                    ctx.strokeStyle = '#00ff88';
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(x, y, w, h);
+
+                    // 머리 위 기준선
+                    ctx.strokeStyle = '#ffff00';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([10, 10]);
+                    ctx.beginPath();
+                    ctx.moveTo(0, headTopY);
+                    ctx.lineTo(canvas.width, headTopY);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    // 라벨
+                    ctx.fillStyle = '#ffff00';
+                    ctx.font = '16px sans-serif';
+                    ctx.fillText('머리 기준선', 10, headTopY - 10);
+                }
+            } else {
+                faceDot.classList.remove('active');
+            }
+
+            // 손 그리기
+            if (latestHandResults && latestHandResults.multiHandLandmarks.length > 0) {
+                handDot.classList.add('active');
+
+                for (const landmarks of latestHandResults.multiHandLandmarks) {
+                    // 손 연결선 그리기
+                    const connections = [
+                        [0, 1], [1, 2], [2, 3], [3, 4],
+                        [0, 5], [5, 6], [6, 7], [7, 8],
+                        [0, 9], [9, 10], [10, 11], [11, 12],
+                        [0, 13], [13, 14], [14, 15], [15, 16],
+                        [0, 17], [17, 18], [18, 19], [19, 20],
+                        [5, 9], [9, 13], [13, 17]
+                    ];
+
+                    ctx.strokeStyle = '#00ffff';
+                    ctx.lineWidth = 2;
+
+                    for (const [i, j] of connections) {
+                        const p1 = landmarks[i];
+                        const p2 = landmarks[j];
+                        ctx.beginPath();
+                        ctx.moveTo(canvas.width - p1.x * canvas.width, p1.y * canvas.height);
+                        ctx.lineTo(canvas.width - p2.x * canvas.width, p2.y * canvas.height);
+                        ctx.stroke();
+                    }
+
+                    // 손가락 점 그리기
+                    for (const point of landmarks) {
+                        ctx.fillStyle = '#ff00ff';
+                        ctx.beginPath();
+                        ctx.arc(canvas.width - point.x * canvas.width, point.y * canvas.height, 5, 0, 2 * Math.PI);
+                        ctx.fill();
+                    }
+
+                    // 손의 가장 높은 점 찾기
+                    let minY = Infinity;
+                    for (const point of landmarks) {
+                        const y = point.y * canvas.height;
+                        if (y < minY) minY = y;
+                    }
+                    handPositions.push(minY);
+                }
+            } else {
+                handDot.classList.remove('active');
+            }
+
+            // 감지 체크
+            let currentState = false;
+            if (headTopY !== null && handPositions.length > 0) {
+                for (const handY of handPositions) {
+                    if (handY < headTopY) {
+                        currentState = true;
+                        break;
+                    }
+                }
+            }
+
+            // 상태 변화 (손이 머리 위로 올라간 순간)
+            if (currentState && !handOnHead) {
+                playBeep();
+                detectDot.classList.add('detected');
+                setTimeout(() => detectDot.classList.remove('detected'), 500);
+            }
+
+            if (currentState) {
+                detectDot.classList.add('active');
+            } else {
+                detectDot.classList.remove('active');
+            }
+
+            handOnHead = currentState;
+        }
+
+        // 카메라 시작
+        async function startCamera() {
+            startBtn.disabled = true;
+            startBtn.textContent = '로딩 중...';
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: 640, height: 480, facingMode: 'user' }
+                });
+
+                video.srcObject = stream;
+                await video.play();
+
+                cameraDot.classList.add('active');
+                startBtn.textContent = '실행 중';
+
+                // 프레임 처리 루프
+                async function processFrame() {
+                    if (video.readyState >= 2) {
+                        await hands.send({ image: video });
+                        await faceDetection.send({ image: video });
+                    }
+                    requestAnimationFrame(processFrame);
+                }
+
+                processFrame();
+
+            } catch (err) {
+                console.error('카메라 오류:', err);
+                alert('카메라를 사용할 수 없습니다. 권한을 확인해주세요.');
+                startBtn.disabled = false;
+                startBtn.textContent = '카메라 시작';
+            }
+        }
+
+        startBtn.addEventListener('click', startCamera);
+    </script>
+</body>
+</html>
