@@ -315,7 +315,8 @@
                     const w = bbox.width * canvas.width;
                     const h = bbox.height * canvas.height;
 
-                    headTopY = y;
+                    // 머리 기준선을 얼굴 박스 중간 정도로 설정 (더 아래로)
+                    headTopY = y + h * 0.3;
 
                     // 얼굴 박스
                     ctx.strokeStyle = '#00ff88';
